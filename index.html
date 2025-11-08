@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Speedtest Android</title>
+<title>Mini-Speedtest Android</title>
 <style>
 body { font-family: monospace; background:#0e0e0e; color:#d0ffd0; padding:20px; }
 h1 { color:#00ffaa; }
@@ -12,7 +12,7 @@ button { background:#00cc88; border:none; padding:10px 20px; font-size:16px; bor
 </style>
 </head>
 <body>
-<h1>Speedtest (Android-kompatibel)</h1>
+<h1>Mini-Speedtest (Android)</h1>
 <button id="btnStart">Test starten</button>
 <div id="results">
 <p>Status: <span id="status" class="value">bereit</span></p>
@@ -34,42 +34,64 @@ async function getIPInfo() {
   }
 }
 
-// Simulierter Speedtest (da echte Downloads CORS blockieren)
-function simulateSpeed(min, max) {
-  return (Math.random() * (max - min) + min).toFixed(2);
+async function tryDownload(url) {
+  const start = performance.now();
+  const res = await fetch(url, { cache:'no-store' });
+  const blob = await res.blob();
+  const end = performance.now();
+  const time = (end - start) / 1000;
+  const mbps = (blob.size * 8) / (1024*1024) / time;
+  return mbps.toFixed(2);
 }
 
-function guessPlan(dl, ul) {
-  const max = Math.max(dl, ul);
-  if (max > 800) return '≈ 1 Gbit/s (Glasfaser)';
-  if (max > 300) return '≈ 250–500 Mbit/s';
-  if (max > 90) return '≈ 100–250 Mbit/s';
-  if (max > 25) return '≈ 50–100 Mbit/s';
-  if (max > 10) return '≈ 16–50 Mbit/s';
+async function downloadTest() {
+  // Dateien, die du vorher ins Repository hochgeladen hast
+  const urls = [
+    '1MB.bin',
+    '5MB.bin'
+  ];
+  for (const u of urls) {
+    try {
+      return await tryDownload(u);
+    } catch(e) {
+      console.warn('Download fehlgeschlagen:', u, e);
+    }
+  }
+  throw new Error('Alle Download-Tests fehlgeschlagen');
+}
+
+function guessPlan(dl) {
+  if(dl > 800) return '≈ 1 Gbit/s (Glasfaser)';
+  if(dl > 300) return '≈ 250–500 Mbit/s';
+  if(dl > 90) return '≈ 100–250 Mbit/s';
+  if(dl > 25) return '≈ 50–100 Mbit/s';
+  if(dl > 10) return '≈ 16–50 Mbit/s';
   return 'Langsam / Mobilnetz';
 }
 
 document.getElementById('btnStart').addEventListener('click', async () => {
   const g = id => document.getElementById(id);
-  g('status').textContent = 'Starte Tests...';
+  g('status').textContent = 'Starte Test...';
   g('dl').textContent = g('ul').textContent = g('plan').textContent = '–';
 
   const info = await getIPInfo();
   g('ip').textContent = info.ip;
   g('isp').textContent = info.isp;
 
-  g('status').textContent = 'Download...';
-  await new Promise(r => setTimeout(r, 1000));
-  const dl = simulateSpeed(20, 400); // simuliert Download-Mbps
-  g('dl').textContent = dl + ' Mbit/s';
+  try {
+    g('status').textContent = 'Download wird gemessen...';
+    const dl = await downloadTest();
+    g('dl').textContent = dl + ' Mbit/s';
 
-  g('status').textContent = 'Upload...';
-  await new Promise(r => setTimeout(r, 1000));
-  const ul = simulateSpeed(5, 100); // simuliert Upload-Mbps
-  g('ul').textContent = ul + ' Mbit/s';
+    // Upload kann hier nicht korrekt getestet werden ohne eigenen Server
+    g('ul').textContent = '–';
 
-  g('plan').textContent = guessPlan(Number(dl), Number(ul));
-  g('status').textContent = 'Fertig ✅';
+    g('plan').textContent = guessPlan(Number(dl));
+    g('status').textContent = 'Fertig ✅';
+  } catch(e) {
+    g('status').textContent = 'Fehler beim Test ❌';
+    console.error(e);
+  }
 });
 </script>
 </body>

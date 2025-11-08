@@ -24,6 +24,7 @@ button { background:#00cc88; border:none; padding:10px 20px; font-size:16px; bor
 </div>
 
 <script>
+// IP & Provider abrufen
 async function getIPInfo() {
   try {
     const res = await fetch('https://ipapi.co/json/');
@@ -34,6 +35,7 @@ async function getIPInfo() {
   }
 }
 
+// Download-Test über GitHub Pages Dateien
 async function tryDownload(url) {
   const start = performance.now();
   const res = await fetch(url, { cache:'no-store' });
@@ -45,11 +47,7 @@ async function tryDownload(url) {
 }
 
 async function downloadTest() {
-  // Dateien, die du vorher ins Repository hochgeladen hast
-  const urls = [
-    '1MB.bin',
-    '5MB.bin'
-  ];
+  const urls = ['1MB.bin','5MB.bin']; // deine hochgeladenen Testdateien
   for (const u of urls) {
     try {
       return await tryDownload(u);
@@ -60,6 +58,19 @@ async function downloadTest() {
   throw new Error('Alle Download-Tests fehlgeschlagen');
 }
 
+// Upload-Test über Netlify Serverless Function
+async function uploadTest() {
+  const url = 'https://mein-speedtest.netlify.app/.netlify/functions/upload'; // ersetze durch deine Netlify URL
+  const blob = new Blob([new Uint8Array(1024*1024)]); // 1 MB Testdatei
+  const start = performance.now();
+  await fetch(url, { method:'POST', body: blob });
+  const end = performance.now();
+  const t = (end - start)/1000;
+  const mbps = (blob.size * 8)/(1024*1024)/t;
+  return mbps.toFixed(2);
+}
+
+// Tarif schätzen
 function guessPlan(dl) {
   if(dl > 800) return '≈ 1 Gbit/s (Glasfaser)';
   if(dl > 300) return '≈ 250–500 Mbit/s';
@@ -69,23 +80,29 @@ function guessPlan(dl) {
   return 'Langsam / Mobilnetz';
 }
 
+// Button Event
 document.getElementById('btnStart').addEventListener('click', async () => {
   const g = id => document.getElementById(id);
   g('status').textContent = 'Starte Test...';
   g('dl').textContent = g('ul').textContent = g('plan').textContent = '–';
 
+  // IP/Provider
   const info = await getIPInfo();
   g('ip').textContent = info.ip;
   g('isp').textContent = info.isp;
 
   try {
+    // Download
     g('status').textContent = 'Download wird gemessen...';
     const dl = await downloadTest();
     g('dl').textContent = dl + ' Mbit/s';
 
-    // Upload kann hier nicht korrekt getestet werden ohne eigenen Server
-    g('ul').textContent = '–';
+    // Upload
+    g('status').textContent = 'Upload wird gemessen...';
+    const ul = await uploadTest();
+    g('ul').textContent = ul + ' Mbit/s';
 
+    // Tarif schätzen
     g('plan').textContent = guessPlan(Number(dl));
     g('status').textContent = 'Fertig ✅';
   } catch(e) {

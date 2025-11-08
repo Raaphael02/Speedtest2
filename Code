@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Speedtest Android</title>
+  <style>
+    body { font-family: monospace; background:#0e0e0e; color:#d0ffd0; padding:20px; }
+    h1 { color:#00ffaa; }
+    button { background:#00cc88; border:none; padding:10px 20px; font-size:16px; border-radius:8px; cursor:pointer; }
+    #results { margin-top:20px; background:#1c1c1c; padding:15px; border-radius:10px; width:fit-content; }
+    .value { color:#fff; font-weight:bold; }
+  </style>
+</head>
+<body>
+  <h1>Speedtest (mobil-freundlich)</h1>
+  <button id="btnStart">Test starten</button>
+  <div id="results">
+    <p>Status: <span id="status" class="value">bereit</span></p>
+    <p>IP: <span id="ip" class="value">–</span></p>
+    <p>Provider: <span id="isp" class="value">–</span></p>
+    <p>Download: <span id="dl" class="value">–</span></p>
+    <p>Upload: <span id="ul" class="value">–</span></p>
+    <p>Geschätzter Tarif: <span id="plan" class="value">–</span></p>
+  </div>
+
+  <script>
+    async function getIPInfo() {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        return { ip: data.ip, isp: data.org || data.isp || 'unbekannt' };
+      } catch {
+        return { ip: 'Fehler', isp: 'Fehler' };
+      }
+    }
+
+    async function tryDownload(url) {
+      const start = performance.now();
+      const res = await fetch(url, { cache:'no-store', mode:'cors' });
+      const blob = await res.blob();
+      const end = performance.now();
+      const time = (end - start) / 1000;
+      const mbps = (blob.size * 8) / (1024 * 1024) / time;
+      return mbps.toFixed(2);
+    }
+
+    async function downloadTest() {
+      const urls = [
+        'https://speed.hetzner.de/1MB.bin',
+        'https://ipv4.download.thinkbroadband.com/1MB.zip',
+        'https://proof.ovh.net/files/1Mb.dat'
+      ];
+      for (const u of urls) {
+        try {
+          return await tryDownload(u);
+        } catch (e) {
+          console.warn('Download fehlgeschlagen, nächster Server:', u);
+        }
+      }
+      throw new Error('Alle Download-Tests fehlgeschlagen');
+    }
+
+    async function uploadTest() {
+      const servers = [
+        'https://httpbin.org/post',
+        'https://postman-echo.com/post'
+      ];
+      const blob = new Blob([new Uint8Array(512 * 1024)]); // 0,5 MB
+      for (const u of servers) {
+        const start = performance.now();
+        try {
+          const res = await fetch(u, { method:'POST', body: blob });
+          await res.text();
+          const end = performance.now();
+          const t = (end - start) / 1000;
+          const mbps = (blob.size * 8) / (1024 * 1024) / t;
+          return mbps.toFixed(2);
+        } catch (e) {
+          console.warn('Upload fehlgeschlagen:', u);
+        }
+      }
+      throw new Error('Alle Upload-Server blockiert');
+    }
+
+    function guessPlan(dl, ul) {
+      const max = Math.max(dl, ul);
+      if (max > 800) return '≈ 1 Gbit/s (Glasfaser)';
+      if (max > 300) return '≈ 250–500 Mbit/s';
+      if (max > 90) return '≈ 100–250 Mbit/s';
+      if (max > 25) return '≈ 50–100 Mbit/s';
+      if (max > 10) return '≈ 16–50 Mbit/s';
+      return 'Langsam / Mobilnetz';
+    }
+
+    document.getElementById('btnStart').addEventListener('click', async () => {
+      const g = id => document.getElementById(id);
+      g('status').textContent = 'Starte Tests...';
+      g('dl').textContent = g('ul').textContent = g('plan').textContent = '–';
+
+      const info = await getIPInfo();
+      g('ip').textContent = info.ip;
+      g('isp').textContent = info.isp;
+
+      try {
+        g('status').textContent = 'Download...';
+        const dl = await downloadTest();
+        g('dl').textContent = dl + ' Mbit/s';
+
+        g('status').textContent = 'Upload...';
+        const ul = await uploadTest();
+        g('ul').textContent = ul + ' Mbit/s';
+
+        g('plan').textContent = guessPlan(Number(dl), Number(ul));
+        g('status').textContent = 'Fertig ✅';
+      } catch (e) {
+        g('status').textContent = 'Fehler beim Test ❌';
+        console.error(e);
+      }
+    });
+  </script>
+</body>
+</html>
